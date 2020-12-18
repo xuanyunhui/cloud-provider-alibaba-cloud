@@ -47,6 +47,7 @@ import (
 // ProviderName is the name of this cloud provider.
 const (
 	ProviderName = "alicloud"
+	DryRun       = true
 )
 
 // CLUSTER_ID default cluster id if it is not specified.
@@ -195,7 +196,7 @@ func (c *Cloud) Initialize(builder cloudprovider.ControllerClientBuilder, stop <
 	if route.Options.ConfigCloudRoutes {
 		cidr := route.Options.ClusterCIDR
 		if len(strings.TrimSpace(cidr)) == 0 {
-			panic(fmt.Sprintf("ivalid cluster CIDR %s", cidr))
+			panic(fmt.Sprintf("invalid cluster CIDR %s", cidr))
 		}
 		_, cidrc, err := net.ParseCIDR(cidr)
 		if err != nil {
@@ -249,6 +250,7 @@ func (c *Cloud) Initialize(builder cloudprovider.ControllerClientBuilder, stop <
 		klog.Error("endpoints cache has not been syncd")
 		return
 	}
+	InjectClient(c.climgr, c.kclient)
 	c.ifactory = shared
 }
 

@@ -192,6 +192,9 @@ func (rc *RouteController) Run(stopCh <-chan struct{}, syncPeriod time.Duration)
 	go wait.NonSlidingUntil(func() {
 		if err := rc.reconcile(); err != nil {
 			klog.Errorf("Couldn't reconcile node routes: %v", err)
+			utils.AddEvent(utils.VPC, "route", "",
+				"RouteReconcileError",
+				utils.ERROR, fmt.Sprintf("Couldn't reconcile node routes,error :%s", err.Error()))
 		}
 	}, syncPeriod, stopCh)
 

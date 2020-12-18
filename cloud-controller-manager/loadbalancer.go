@@ -281,7 +281,7 @@ func equalsAddressIPVersion(request, origined slb.AddressIPVersionType) bool {
 // EnsureLoadBalancer make sure slb is reconciled nodes []*v1.Node
 func (s *LoadBalancerClient) EnsureLoadBalancer(ctx context.Context, service *v1.Service, nodes *EndpointWithENI, vswitchid string) (*slb.LoadBalancerType, error) {
 	utils.Logf(service, "ensure loadbalancer with service details, \n%+v", PrettyJson(service))
-
+	ctx = context.WithValue(ctx, utils.ContextService, service)
 	exists, origined, err := s.FindLoadBalancer(ctx, service)
 	if err != nil {
 		return nil, err
@@ -351,6 +351,7 @@ func (s *LoadBalancerClient) EnsureLoadBalancer(ctx context.Context, service *v1
 	} else {
 		// Need to verify loadbalancer.
 		// Reuse SLB is not allowed when the SLB is created by k8s service.
+		ctx = context.WithValue(ctx, utils.ContextSLB, origined)
 		tags, _, err := s.c.DescribeTags(
 			ctx,
 			&slb.DescribeTagsArgs{

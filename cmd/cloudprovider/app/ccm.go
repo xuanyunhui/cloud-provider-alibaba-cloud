@@ -35,11 +35,9 @@ import (
 	"k8s.io/kubernetes/pkg/controller"
 	"k8s.io/kubernetes/pkg/util/configz"
 	"math/rand"
-	"net"
 	"net/http"
 	"net/http/pprof"
 	"os"
-	"strconv"
 )
 
 const (
@@ -206,11 +204,11 @@ func (ccm *ServerCCM) Start() error {
 		configz.InstallHandler(mux)
 		metric.RegisterPrometheus()
 		mux.Handle("/metrics", promhttp.Handler())
-		server := &http.Server{
-			Addr:    net.JoinHostPort(ccm.Generic.Address, strconv.Itoa(int(ccm.Generic.Port))),
-			Handler: mux,
-		}
-		klog.Fatal(server.ListenAndServe())
+		//server := &http.Server{
+		//	Addr:    net.JoinHostPort(ccm.Generic.Address, strconv.Itoa(int(ccm.Generic.Port))),
+		//	Handler: mux,
+		//}
+		//klog.Fatal(server.ListenAndServe())
 	}()
 	return nil
 }
@@ -358,7 +356,7 @@ func runControllerService(
 
 	scon, err := service.NewController(
 		cloudslb,
-		builder.ClientOrDie("cloud-controller-manager"),
+		builder.ClientOrDie("service-controller"),
 		informer,
 		ccm.KubeCloudShared.ClusterName,
 	)

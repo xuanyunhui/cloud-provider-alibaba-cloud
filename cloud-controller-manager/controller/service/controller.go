@@ -21,14 +21,15 @@ import (
 	"k8s.io/cloud-provider"
 	"k8s.io/cloud-provider-alibaba-cloud/cloud-controller-manager/utils"
 	"k8s.io/cloud-provider-alibaba-cloud/cloud-controller-manager/utils/metric"
-	servicehelper "k8s.io/cloud-provider/service/helpers"
 	metrics "k8s.io/component-base/metrics/prometheus/ratelimiter"
 	"k8s.io/klog"
 	controller "k8s.io/kube-aggregator/pkg/controllers"
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
+	"os"
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -112,6 +113,57 @@ func NewController(
 	return con, nil
 }
 
+var initial = sync.Map{}
+
+func initMap(client clientset.Interface) error {
+	svc, err := client.
+		CoreV1().
+		Services("").
+		List(context.Background(), metav1.ListOptions{ResourceVersion: "0"})
+	if err != nil {
+		return fmt.Errorf("init map fail: %s", err.Error())
+	}
+	length := 0
+	for _, m := range svc.Items {
+		if !isProcessNeeded(&m) {
+			continue
+		}
+		if !NeedAdd(&m) {
+			continue
+		}
+		length++
+		initial.Store(key(&m), 0)
+	}
+	if length == 0 {
+		klog.Infof("ccm initial process finished.")
+		err := utils.ResultEvent(client, utils.SUCCESS, "ccm initial process finished")
+		if err != nil {
+			klog.Errorf("write precheck event fail: %s", err.Error())
+		}
+		os.Exit(0)
+	}
+	return nil
+}
+
+func mapfull() bool {
+	success := true
+	initial.Range(
+		func(key, value interface{}) bool {
+			val, ok := value.(int)
+			if !ok {
+				// not supposed
+				return true
+			}
+			if val != 1 {
+				success = false
+				return false
+			}
+			return true
+		},
+	)
+	return success
+}
+
 func (con *Controller) Run(stopCh <-chan struct{}, workers int) {
 	defer runtime.HandleCrash()
 	defer func() {
@@ -132,7 +184,11 @@ func (con *Controller) Run(stopCh <-chan struct{}, workers int) {
 		klog.Error("service and nodes cache has not been syncd")
 		return
 	}
-
+	err := initMap(con.client)
+	if err != nil {
+		klog.Errorf("initmap: %s", err.Error())
+		return
+	}
 	tasks := map[string]SyncTask{
 		SERVICE_QUEUE: con.ServiceSyncTask,
 	}
@@ -142,6 +198,7 @@ func (con *Controller) Run(stopCh <-chan struct{}, workers int) {
 		for que, task := range tasks {
 			go wait.Until(
 				WorkerFunc(
+					con.client,
 					con.local,
 					con.queues[que],
 					task,
@@ -343,6 +400,7 @@ func (con *Controller) HandlerForServiceChange(
 }
 
 func WorkerFunc(
+	client clientset.Interface,
 	contex *Context,
 	queue queue.DelayingInterface,
 	syncd SyncTask,
@@ -351,7 +409,6 @@ func WorkerFunc(
 	return func() {
 		// requeue exponential in case of throttle error.
 		// for each worker function
-		back := NewBackoff(5*time.Second, 1.5)
 		for {
 			func() {
 				// Workerqueue ensures that a single key would not be process
@@ -360,18 +417,22 @@ func WorkerFunc(
 				if quit {
 					return
 				}
-				defer queue.Done(key)
+				defer func() {
+					queue.Done(key)
+					initial.Store(key, 1)
+					if mapfull() {
+						klog.Infof("ccm initial process finished.")
+						err := utils.ResultEvent(client, utils.SUCCESS, "ccm initial process finished")
+						if err != nil {
+							klog.Errorf("write precheck event fail: %s", err.Error())
+						}
+						os.Exit(0)
+					}
+				}()
 
 				klog.Infof("[%s] worker: queued sync for service", key)
 
 				if err := syncd(key.(string)); err != nil {
-					if strings.Contains(err.Error(), "Throttling") {
-						next := back.Next()
-						queue.AddAfter(key, next)
-						klog.Warningf("request was throttled: %s, retry in next %d ns", key, next)
-					} else {
-						queue.AddAfter(key, 5*time.Second)
-					}
 					klog.Errorf("requeue: sync error for service %s %v", key, err)
 				}
 			}()
@@ -490,29 +551,7 @@ func retry(
 	fun func(svc *v1.Service) error,
 	svc *v1.Service,
 ) error {
-	if backoff == nil {
-		backoff = &wait.Backoff{
-			Duration: 1 * time.Second,
-			Steps:    8,
-			Factor:   2,
-			Jitter:   4,
-		}
-	}
-	return wait.ExponentialBackoff(
-		*backoff,
-		func() (bool, error) {
-			err := fun(svc)
-			if err != nil &&
-				strings.Contains(err.Error(), TRY_AGAIN) {
-				klog.Errorf("retry with error: %s", err.Error())
-				return false, nil
-			}
-			if err != nil {
-				klog.Errorf("retry error: NotRetry, %s", err.Error())
-			}
-			return true, nil
-		},
-	)
+	return fun(svc)
 }
 
 func (con *Controller) update(cached, svc *v1.Service) error {
@@ -539,11 +578,6 @@ func (con *Controller) update(cached, svc *v1.Service) error {
 		} else {
 			// remove svc from cache which is not loadbalancer type
 			con.local.Remove(key(svc))
-		}
-
-		//remove hashLabel
-		if err := con.removeServiceHash(svc); err != nil {
-			return err
 		}
 
 		// continue for updating service status.
@@ -576,9 +610,6 @@ func (con *Controller) update(cached, svc *v1.Service) error {
 				"SuccessfulEnsure",
 				"Ensure loadbalancer successfully",
 			)
-			if err := con.addServiceHash(svc); err != nil {
-				return err
-			}
 		} else {
 			// If error msg contains "warning", just broadcast warning events, not retry to ensure loadbalancer
 			if strings.Contains(err.Error(), "warning") {
@@ -609,33 +640,6 @@ func (con *Controller) update(cached, svc *v1.Service) error {
 	// processed it, a cached service being nil implies that it hasn't yet
 	// been successfully processed.
 	con.local.Set(key(svc), svc)
-	return nil
-}
-
-func (con *Controller) addServiceHash(svc *v1.Service) error {
-	updated := svc.DeepCopy()
-	if updated.Labels == nil {
-		updated.Labels = make(map[string]string)
-	}
-	serviceHash, err := utils.GetServiceHash(svc)
-	if err != nil {
-		return fmt.Errorf("compute service hash: %s", err.Error())
-	}
-	updated.Labels[utils.LabelServiceHash] = serviceHash
-	if _, err := servicehelper.PatchService(con.client.CoreV1(), svc, updated); err != nil {
-		return fmt.Errorf("update service hash: %s", err.Error())
-	}
-	return nil
-}
-
-func (con *Controller) removeServiceHash(svc *v1.Service) error {
-	updated := svc.DeepCopy()
-	if _, ok := updated.Labels[utils.LabelServiceHash]; ok {
-		delete(updated.Labels, utils.LabelServiceHash)
-		if _, err := servicehelper.PatchService(con.client.CoreV1(), svc, updated); err != nil {
-			return fmt.Errorf("remove service hash, error: %s", err.Error())
-		}
-	}
 	return nil
 }
 

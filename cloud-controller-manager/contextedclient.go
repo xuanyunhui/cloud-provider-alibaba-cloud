@@ -9,23 +9,44 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+type CoreClient interface {
+	GetCoreClient() kubernetes.Interface
+	SetCoreClient(core kubernetes.Interface)
+}
+
+type CloudClient interface {
+	GetCloudClient() interface{}
+	SetCloudClient(cloud interface{})
+}
+
 type BaseClient struct {
 	core kubernetes.Interface
 }
+
+func (b *BaseClient) GetCoreClient() kubernetes.Interface { return b.core }
 
 func (b *BaseClient) SetCoreClient(core kubernetes.Interface) { b.core = core }
 
 func NewContextedClientSLB(key, secret, region string) *ContextedClientSLB {
 	return &ContextedClientSLB{
-		BaseClient: BaseClient{},
-		slb:        slb.NewSLBClientWithSecurityToken4RegionalDomain(key, secret, "", common.Region(region)),
+		CoreClient: &BaseClient{},
+		slb:        slb.NewSLBClientWithSecurityToken(key, secret, "", common.Region(region)),
 	}
 }
 
 type ContextedClientSLB struct {
-	BaseClient
+	CoreClient
 	// base slb client
 	slb *slb.Client
+}
+
+func (c *ContextedClientSLB) GetCloudClient() interface{} { return c.slb }
+func (c *ContextedClientSLB) SetCloudClient(cloud interface{}) {
+	client, ok := cloud.(*slb.Client)
+	if !ok {
+		panic("cloud does not implement slb client")
+	}
+	c.slb = client
 }
 
 func (c *ContextedClientSLB) DescribeLoadBalancers(
@@ -114,7 +135,6 @@ func (c *ContextedClientSLB) DeleteLoadBalancer(ctx context.Context, loadBalance
 func (c *ContextedClientSLB) SetLoadBalancerDeleteProtection(ctx context.Context, args *slb.SetLoadBalancerDeleteProtectionArgs) (err error) {
 	return c.slb.SetLoadBalancerDeleteProtection(args)
 }
-
 
 func (c *ContextedClientSLB) SetLoadBalancerName(ctx context.Context, loadBalancerId string, loadBalancerName string) (err error) {
 
@@ -274,7 +294,7 @@ func (c *ContextedClientSLB) RemoveVServerGroupBackendServers(
 func NewContextedClientINS(key, secret, region string) *ContextedClientINS {
 	return &ContextedClientINS{
 		BaseClient: BaseClient{},
-		ecs:        ecs.NewECSClientWithSecurityToken4RegionalDomain(key, secret, "", common.Region(region)),
+		ecs:        ecs.NewECSClientWithSecurityToken(key, secret, "", common.Region(region)),
 	}
 }
 
@@ -282,6 +302,15 @@ type ContextedClientINS struct {
 	BaseClient
 	// base ecs client
 	ecs *ecs.Client
+}
+
+func (c *ContextedClientINS) GetCloudClient() interface{} { return c.ecs }
+func (c *ContextedClientINS) SetCloudClient(cloud interface{}) {
+	client, ok := cloud.(*ecs.Client)
+	if !ok {
+		panic("cloud does not implement ecs client ins")
+	}
+	c.ecs = client
 }
 
 func (c *ContextedClientINS) AddTags(ctx context.Context, args *ecs.AddTagsArgs) error {
@@ -312,7 +341,7 @@ func NewContextedClientPVTZ(key, secret, region string) *ContextedClientPVTZ {
 	return &ContextedClientPVTZ{
 		BaseClient: BaseClient{},
 		// TODO: change to regional client
-		pvtz:       pvtz.NewPVTZClientWithSecurityToken(key, secret, "", common.Region(region)),
+		pvtz: pvtz.NewPVTZClientWithSecurityToken(key, secret, "", common.Region(region)),
 	}
 }
 
@@ -320,6 +349,15 @@ type ContextedClientPVTZ struct {
 	BaseClient
 	// base pvtz client
 	pvtz *pvtz.Client
+}
+
+func (c *ContextedClientPVTZ) GetCloudClient() interface{} { return c.pvtz }
+func (c *ContextedClientPVTZ) SetCloudClient(cloud interface{}) {
+	client, ok := cloud.(*pvtz.Client)
+	if !ok {
+		panic("cloud does not implement pvtz client")
+	}
+	c.pvtz = client
 }
 
 func (c *ContextedClientPVTZ) DescribeZones(ctx context.Context, args *pvtz.DescribeZonesArgs) (zones []pvtz.ZoneType, err error) {
@@ -379,7 +417,7 @@ func (c *ContextedClientPVTZ) SetZoneRecordStatus(ctx context.Context, args *pvt
 func NewContextedClientRoute(key, secret, region string) *ContextedClientRoute {
 	return &ContextedClientRoute{
 		BaseClient: BaseClient{},
-		ecs:        ecs.NewVPCClientWithSecurityToken4RegionalDomain(key, secret, "", common.Region(region)),
+		ecs:        ecs.NewVPCClientWithSecurityToken(key, secret, "", common.Region(region)),
 	}
 }
 
@@ -387,6 +425,15 @@ type ContextedClientRoute struct {
 	BaseClient
 	// base slb client
 	ecs *ecs.Client
+}
+
+func (c *ContextedClientRoute) GetCloudClient() interface{} { return c.ecs }
+func (c *ContextedClientRoute) SetCloudClient(cloud interface{}) {
+	client, ok := cloud.(*ecs.Client)
+	if !ok {
+		panic("cloud does not implement ecs client route")
+	}
+	c.ecs = client
 }
 
 func (c *ContextedClientRoute) DescribeVpcs(ctx context.Context, args *ecs.DescribeVpcsArgs) (vpcs []ecs.VpcSetType, pagination *common.PaginationResult, err error) {

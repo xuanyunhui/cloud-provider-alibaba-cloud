@@ -18,17 +18,21 @@ package alicloud
 
 import (
 	"encoding/json"
-	"github.com/denverdino/aliyungo/metadata"
 	"github.com/ghodss/yaml"
 	"github.com/go-cmd/cmd"
 
 	"io/ioutil"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog"
 	"path/filepath"
 	"time"
 
 	"encoding/base64"
 	"fmt"
+	"github.com/denverdino/aliyungo/ecs"
+	"github.com/denverdino/aliyungo/metadata"
+	"github.com/denverdino/aliyungo/pvtz"
+	"github.com/denverdino/aliyungo/slb"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"strings"
 )
@@ -66,7 +70,21 @@ func NewClientMgr(key, secret string) (*ClientMgr, error) {
 	if err != nil {
 		return nil, fmt.Errorf("can not determin vpcid: %s", err.Error())
 	}
-	ecsclient := NewContextedClientINS(key, secret, region)
+	var ecsclient ClientInstanceSDK
+	ecsclient = NewContextedClientINS(key, secret, region)
+	if DryRun {
+		ecsclient = NewDryRunClientINS(key, secret, region)
+	}
+	var slbclient ClientSLBSDK
+	slbclient = NewContextedClientSLB(key, secret, region)
+	if DryRun {
+		slbclient = NewDryRunClientSLB(key, secret, region)
+	}
+	var pvtzclient ClientPVTZSDK
+	pvtzclient = NewContextedClientPVTZ(key, secret, "cn-hangzhou")
+	if DryRun {
+		pvtzclient = NewDryRunClientPVTZ(key, secret, "cn-hangzhou")
+	}
 	mgr := &ClientMgr{
 		stop: make(<-chan struct{}, 1),
 		meta: m,
@@ -76,10 +94,10 @@ func NewClientMgr(key, secret string) (*ClientMgr, error) {
 		loadbalancer: &LoadBalancerClient{
 			vpcid: vpcid,
 			ins:   ecsclient,
-			c:     NewContextedClientSLB(key, secret, region),
+			c:     slbclient,
 		},
 		privateZone: &PrivateZoneClient{
-			c: NewContextedClientPVTZ(key, secret, "cn-hangzhou"),
+			c: pvtzclient,
 		},
 		routes: &RoutesClient{
 			client: NewContextedClientRoute(key, secret, region),
@@ -143,28 +161,59 @@ func (mgr *ClientMgr) Start(settoken func(mgr *ClientMgr, token *Token) error) e
 	)
 }
 
-func RefreshToken(mgr *ClientMgr, token *Token) error {
-	ecsclient := mgr.instance.c.(*ContextedClientINS)
-	slbclient := mgr.loadbalancer.c.(*ContextedClientSLB)
-	pvtzclient := mgr.privateZone.c.(*ContextedClientPVTZ)
-	vpcclient := mgr.routes.client.(*ContextedClientRoute)
-	ecsclient.ecs.WithSecurityToken(token.Token).
-		WithAccessKeyId(token.AccessKey).
-		WithAccessKeySecret(token.AccessSecret)
-	slbclient.slb.WithSecurityToken(token.Token).
-		WithAccessKeyId(token.AccessKey).
-		WithAccessKeySecret(token.AccessSecret)
-	pvtzclient.pvtz.WithSecurityToken(token.Token).
-		WithAccessKeyId(token.AccessKey).
-		WithAccessKeySecret(token.AccessSecret)
-	vpcclient.ecs.WithSecurityToken(token.Token).
-		WithAccessKeyId(token.AccessKey).
-		WithAccessKeySecret(token.AccessSecret)
+func InjectClient(mgr *ClientMgr, client kubernetes.Interface) {
 
-	ecsclient.ecs.SetUserAgent(KUBERNETES_ALICLOUD_IDENTITY)
-	slbclient.slb.SetUserAgent(KUBERNETES_ALICLOUD_IDENTITY)
-	pvtzclient.pvtz.SetUserAgent(KUBERNETES_ALICLOUD_IDENTITY)
-	vpcclient.ecs.SetUserAgent(KUBERNETES_ALICLOUD_IDENTITY)
+	for k, inf := range map[string]interface{}{
+		"ecs.route":    mgr.Routes().client,
+		"privatezone":  mgr.PrivateZones().c,
+		"instance":     mgr.Instances().c,
+		"loadbalancer": mgr.LoadBalancers().c,
+	} {
+		preecs, ok := inf.(CoreClient)
+		if ok {
+			preecs.SetCoreClient(client)
+		} else {
+			panic(fmt.Sprintf("client does not implement: %s", k))
+		}
+	}
+}
+
+func RefreshToken(mgr *ClientMgr, token *Token) error {
+	for k, inf := range map[string]interface{}{
+		"ecs.route":    mgr.Routes().client,
+		"privatezone":  mgr.PrivateZones().c,
+		"instance":     mgr.Instances().c,
+		"loadbalancer": mgr.LoadBalancers().c,
+	} {
+		cclient, ok := inf.(CloudClient)
+		if ok {
+			client := cclient.GetCloudClient()
+			switch client.(type) {
+			case *slb.Client:
+				client.(*slb.Client).
+					WithSecurityToken(token.Token).
+					WithAccessKeyId(token.AccessKey).
+					WithAccessKeySecret(token.AccessSecret).
+					SetUserAgent(KUBERNETES_ALICLOUD_IDENTITY)
+			case *ecs.Client:
+				client.(*ecs.Client).
+					WithSecurityToken(token.Token).
+					WithAccessKeyId(token.AccessKey).
+					WithAccessKeySecret(token.AccessSecret).
+					SetUserAgent(KUBERNETES_ALICLOUD_IDENTITY)
+			case *pvtz.Client:
+				client.(*pvtz.Client).
+					WithSecurityToken(token.Token).
+					WithAccessKeyId(token.AccessKey).
+					WithAccessKeySecret(token.AccessSecret).
+					SetUserAgent(KUBERNETES_ALICLOUD_IDENTITY)
+			default:
+				panic("unknown client type")
+			}
+		} else {
+			panic(fmt.Sprintf("client does not implement: %s", k))
+		}
+	}
 	return nil
 }
 

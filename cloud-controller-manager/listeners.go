@@ -631,6 +631,7 @@ func (t *tcp) Update(ctx context.Context) error {
 		HealthCheckDomain:         response.HealthCheckDomain,
 	}
 	needUpdate := false
+	updateReason := fmt.Sprintf("%s/%s need update: ", t.Service.Namespace, t.Service.Name)
 	/*
 		if request.Bandwidth != 0 &&
 			def.Bandwidth != response.Bandwidth {
@@ -644,22 +645,26 @@ func (t *tcp) Update(ctx context.Context) error {
 		def.AclStatus != response.AclStatus {
 		needUpdate = true
 		config.AclStatus = def.AclStatus
+		updateReason += fmt.Sprintf("AclStatus changed( %s -> %s );", response.AclStatus, def.AclStatus)
 	}
 	if request.AclID != "" &&
 		def.AclID != response.AclId {
 		needUpdate = true
 		config.AclId = def.AclID
+		updateReason += fmt.Sprintf("AclID changed( %s -> %s );", response.AclId, def.AclID)
 	}
 	if request.AclType != "" &&
 		def.AclType != response.AclType {
 		needUpdate = true
 		config.AclType = def.AclType
+		updateReason += fmt.Sprintf("AclType changed( %s -> %s );", response.AclType, def.AclType)
 	}
 
 	if request.Scheduler != "" &&
 		def.Scheduler != string(response.Scheduler) {
 		needUpdate = true
 		config.Scheduler = slb.SchedulerType(def.Scheduler)
+		updateReason += fmt.Sprintf("Scheduler changed( %s -> %s );", response.Scheduler, def.Scheduler)
 	}
 
 	// todo: perform healthcheck update.
@@ -667,51 +672,61 @@ func (t *tcp) Update(ctx context.Context) error {
 		def.HealthCheckType != response.HealthCheckType {
 		needUpdate = true
 		config.HealthCheckType = def.HealthCheckType
+		updateReason += fmt.Sprintf("HealthCheckType changed( %s -> %s );", response.HealthCheckType, def.HealthCheckType)
 	}
 	if request.HealthCheckURI != "" &&
 		def.HealthCheckURI != response.HealthCheckURI {
 		needUpdate = true
 		config.HealthCheckURI = def.HealthCheckURI
+		updateReason += fmt.Sprintf("HealthCheckURI changed( %s -> %s );", response.HealthCheckURI, def.HealthCheckURI)
 	}
 	if request.HealthCheckConnectPort != 0 &&
 		def.HealthCheckConnectPort != response.HealthCheckConnectPort {
 		needUpdate = true
 		config.HealthCheckConnectPort = def.HealthCheckConnectPort
+		updateReason += fmt.Sprintf("HealthCheckConnectPort changed( %d -> %d );", response.HealthCheckConnectPort, def.HealthCheckConnectPort)
 	}
 	if request.HealthyThreshold != 0 &&
 		def.HealthyThreshold != response.HealthyThreshold {
 		needUpdate = true
 		config.HealthyThreshold = def.HealthyThreshold
+		updateReason += fmt.Sprintf("HealthyThreshold changed( %d -> %d );", response.HealthyThreshold, def.HealthyThreshold)
 	}
 	if request.UnhealthyThreshold != 0 &&
 		def.UnhealthyThreshold != response.UnhealthyThreshold {
 		needUpdate = true
 		config.UnhealthyThreshold = def.UnhealthyThreshold
+		updateReason += fmt.Sprintf("UnhealthyThreshold changed( %d -> %d );", response.UnhealthyThreshold, def.UnhealthyThreshold)
 	}
 	if request.HealthCheckConnectTimeout != 0 &&
 		def.HealthCheckConnectTimeout != response.HealthCheckConnectTimeout {
 		needUpdate = true
 		config.HealthCheckConnectTimeout = def.HealthCheckConnectTimeout
+		updateReason += fmt.Sprintf("HealthCheckConnectTimeout changed( %d -> %d );", response.HealthCheckConnectTimeout, def.HealthCheckConnectTimeout)
 	}
 	if request.HealthCheckInterval != 0 &&
 		def.HealthCheckInterval != response.HealthCheckInterval {
 		needUpdate = true
 		config.HealthCheckInterval = def.HealthCheckInterval
+		updateReason += fmt.Sprintf("HealthCheckInterval changed( %d -> %d );", response.HealthCheckInterval, def.HealthCheckInterval)
 	}
 	if request.PersistenceTimeout != nil &&
 		*def.PersistenceTimeout != *response.PersistenceTimeout {
 		needUpdate = true
 		config.PersistenceTimeout = def.PersistenceTimeout
+		updateReason += fmt.Sprintf("PersistenceTimeout changed( %d -> %d );", response.PersistenceTimeout, def.PersistenceTimeout)
 	}
 	if request.HealthCheckHttpCode != "" &&
 		def.HealthCheckHttpCode != response.HealthCheckHttpCode {
 		needUpdate = true
 		config.HealthCheckHttpCode = def.HealthCheckHttpCode
+		updateReason += fmt.Sprintf("HealthCheckHttpCode changed( %s -> %s );", response.HealthCheckHttpCode, def.HealthCheckHttpCode)
 	}
 	if request.HealthCheckDomain != "" &&
 		def.HealthCheckDomain != response.HealthCheckDomain {
 		needUpdate = true
 		config.HealthCheckDomain = def.HealthCheckDomain
+		updateReason += fmt.Sprintf("HealthCheckDomain changed( %s -> %s );", response.HealthCheckDomain, def.HealthCheckDomain)
 	}
 	// backend server port has changed.
 	if int(t.NodePort) != response.BackendServerPort {
@@ -735,6 +750,7 @@ func (t *tcp) Update(ctx context.Context) error {
 	utils.Logf(t.Service, "TCP listener checker changed, request update listener attribute [%s]", t.LoadBalancerID)
 	klog.V(5).Infof(PrettyJson(def))
 	klog.V(5).Infof(PrettyJson(response))
+	ctx = context.WithValue(ctx, utils.DryRunMsg, updateReason)
 	return t.Client.SetLoadBalancerTCPListenerAttribute(ctx, config)
 }
 
@@ -809,6 +825,7 @@ func (t *udp) Update(ctx context.Context) error {
 		HealthCheck:               response.HealthCheck,
 	}
 	needUpdate := false
+	updateReason := fmt.Sprintf("%s/%s need update: ", t.Service.Namespace, t.Service.Name)
 	/*
 		if request.Bandwidth != 0 &&
 			request.Bandwidth != response.Bandwidth {
@@ -821,53 +838,63 @@ func (t *udp) Update(ctx context.Context) error {
 		def.AclStatus != response.AclStatus {
 		needUpdate = true
 		config.AclStatus = def.AclStatus
+		updateReason += fmt.Sprintf("AclStatus changed( %s -> %s );", response.AclStatus, def.AclStatus)
 	}
 	if request.AclID != "" &&
 		def.AclID != response.AclId {
 		needUpdate = true
 		config.AclId = def.AclID
+		updateReason += fmt.Sprintf("AclID changed( %s -> %s );", response.AclId, def.AclID)
 	}
 	if request.AclType != "" &&
 		def.AclType != response.AclType {
 		needUpdate = true
 		config.AclType = def.AclType
+		updateReason += fmt.Sprintf("AclType changed( %s -> %s );", response.AclType, def.AclType)
 	}
 
 	if request.Scheduler != "" &&
 		def.Scheduler != string(response.Scheduler) {
 		needUpdate = true
 		config.Scheduler = slb.SchedulerType(def.Scheduler)
+		updateReason += fmt.Sprintf("Scheduler changed( %s -> %s );", response.Scheduler, def.Scheduler)
 	}
 	// todo: perform healthcheck update.
 	if request.HealthCheckConnectPort != 0 &&
 		def.HealthCheckConnectPort != response.HealthCheckConnectPort {
 		needUpdate = true
 		config.HealthCheckConnectPort = def.HealthCheckConnectPort
+		updateReason += fmt.Sprintf("HealthCheckConnectPort changed( %d -> %d );", response.HealthCheckConnectPort, def.HealthCheckConnectPort)
 	}
 	if request.HealthyThreshold != 0 &&
 		def.HealthyThreshold != response.HealthyThreshold {
 		needUpdate = true
 		config.HealthyThreshold = def.HealthyThreshold
+		updateReason += fmt.Sprintf("HealthyThreshold changed( %d -> %d );", response.HealthyThreshold, def.HealthyThreshold)
 	}
 	if request.UnhealthyThreshold != 0 &&
 		def.UnhealthyThreshold != response.UnhealthyThreshold {
 		needUpdate = true
 		config.UnhealthyThreshold = def.UnhealthyThreshold
+		updateReason += fmt.Sprintf("UnhealthyThreshold changed( %d -> %d );", response.UnhealthyThreshold, def.UnhealthyThreshold)
 	}
 	if request.HealthCheckConnectTimeout != 0 &&
 		def.HealthCheckConnectTimeout != response.HealthCheckConnectTimeout {
 		needUpdate = true
 		config.HealthCheckConnectTimeout = def.HealthCheckConnectTimeout
+		updateReason += fmt.Sprintf("HealthCheckConnectTimeout changed( %d -> %d );", response.HealthCheckConnectTimeout, def.HealthCheckConnectTimeout)
 	}
 	if request.HealthCheckInterval != 0 &&
 		def.HealthCheckInterval != response.HealthCheckInterval {
 		needUpdate = true
 		config.HealthCheckInterval = def.HealthCheckInterval
+		updateReason += fmt.Sprintf("HealthCheckInterval changed( %d -> %d );", response.HealthCheckInterval, def.HealthCheckInterval)
 	}
 	if request.PersistenceTimeout != nil &&
 		*def.PersistenceTimeout != *response.PersistenceTimeout {
 		needUpdate = true
 		config.PersistenceTimeout = def.PersistenceTimeout
+		updateReason += fmt.Sprintf("PersistenceTimeout changed( %d -> %d );", response.PersistenceTimeout, def.PersistenceTimeout)
 	}
 	// backend server port has changed.
 	if int(t.NodePort) != response.BackendServerPort {
@@ -894,6 +921,7 @@ func (t *udp) Update(ctx context.Context) error {
 	utils.Logf(t.Service, "UDP listener checker changed, request recreate [%s]\n", t.LoadBalancerID)
 	klog.V(5).Infof(PrettyJson(request))
 	klog.V(5).Infof(PrettyJson(response))
+	ctx = context.WithValue(ctx, utils.DryRunMsg, updateReason)
 	return t.Client.SetLoadBalancerUDPListenerAttribute(ctx, config)
 }
 
@@ -1014,6 +1042,7 @@ func (t *http) Update(ctx context.Context) error {
 		HealthCheckInterval:    response.HealthCheckInterval,
 	}
 	needUpdate := false
+	updateReason := fmt.Sprintf("%s/%s need update: ", t.Service.Namespace, t.Service.Name)
 	needRecreate := false
 	/*
 		if request.Bandwidth != 0 &&
@@ -1027,87 +1056,104 @@ func (t *http) Update(ctx context.Context) error {
 		def.AclStatus != response.AclStatus {
 		needUpdate = true
 		config.AclStatus = def.AclStatus
+		updateReason += fmt.Sprintf("AclStatus changed( %s -> %s );", response.AclStatus, def.AclStatus)
 	}
 	if request.AclID != "" &&
 		def.AclID != response.AclId {
 		needUpdate = true
 		config.AclId = def.AclID
+		updateReason += fmt.Sprintf("AclId changed( %s -> %s );", response.AclId, def.AclID)
 	}
 	if request.AclType != "" &&
 		def.AclType != response.AclType {
 		needUpdate = true
 		config.AclType = def.AclType
+		updateReason += fmt.Sprintf("AclType changed( %s -> %s );", response.AclType, def.AclType)
 	}
 	if request.Scheduler != "" &&
 		def.Scheduler != string(response.Scheduler) {
 		needUpdate = true
 		config.Scheduler = slb.SchedulerType(def.Scheduler)
+		updateReason += fmt.Sprintf("Scheduler changed( %s -> %s );", response.Scheduler, def.Scheduler)
 	}
 	// todo: perform healthcheck update.
 	if request.HealthCheck != "" &&
 		def.HealthCheck != response.HealthCheck {
 		needUpdate = true
 		config.HealthCheck = def.HealthCheck
+		updateReason += fmt.Sprintf("HealthCheck changed( %s -> %s );", response.HealthCheck, def.HealthCheck)
 	}
 	if request.HealthCheckURI != "" &&
 		def.HealthCheckURI != response.HealthCheckURI {
 		needUpdate = true
 		config.HealthCheckURI = def.HealthCheckURI
+		updateReason += fmt.Sprintf("HealthCheckURI changed( %s -> %s );", response.HealthCheckURI, def.HealthCheckURI)
 	}
 	if request.HealthCheckConnectPort != 0 &&
 		def.HealthCheckConnectPort != response.HealthCheckConnectPort {
 		needUpdate = true
 		config.HealthCheckConnectPort = def.HealthCheckConnectPort
+		updateReason += fmt.Sprintf("HealthCheckConnectPort changed( %d -> %d );", response.HealthCheckConnectPort, def.HealthCheckConnectPort)
 	}
 	if request.HealthyThreshold != 0 &&
 		def.HealthyThreshold != response.HealthyThreshold {
 		needUpdate = true
 		config.HealthyThreshold = def.HealthyThreshold
+		updateReason += fmt.Sprintf("HealthyThreshold changed( %d -> %d );", response.HealthyThreshold, def.HealthyThreshold)
 	}
 	if request.UnhealthyThreshold != 0 &&
 		def.UnhealthyThreshold != response.UnhealthyThreshold {
 		needUpdate = true
 		config.UnhealthyThreshold = def.UnhealthyThreshold
+		updateReason += fmt.Sprintf("UnhealthyThreshold changed( %d -> %d );", response.UnhealthyThreshold, def.UnhealthyThreshold)
 	}
 	if request.HealthCheckTimeout != 0 &&
 		def.HealthCheckTimeout != response.HealthCheckTimeout {
 		needUpdate = true
 		config.HealthCheckTimeout = def.HealthCheckTimeout
+		updateReason += fmt.Sprintf("HealthCheckTimeout changed( %d -> %d );", response.HealthCheckTimeout, def.HealthCheckTimeout)
 	}
 	if request.HealthCheckInterval != 0 &&
 		def.HealthCheckInterval != response.HealthCheckInterval {
 		needUpdate = true
 		config.HealthCheckInterval = def.HealthCheckInterval
+		updateReason += fmt.Sprintf("HealthCheckInterval changed( %d -> %d );", response.HealthCheckInterval, def.HealthCheckInterval)
 	}
 	if string(request.StickySession) != "" &&
 		def.StickySession != response.StickySession {
 		needUpdate = true
 		config.StickySession = def.StickySession
+		updateReason += fmt.Sprintf("StickySession changed( %s -> %s );", response.StickySession, def.StickySession)
 	}
 	if string(request.StickySessionType) != "" &&
 		def.StickySessionType != response.StickySessionType {
 		needUpdate = true
 		config.StickySessionType = def.StickySessionType
+		updateReason += fmt.Sprintf("StickySessionType changed( %s -> %s );", response.StickySessionType, def.StickySessionType)
 	}
 	if request.Cookie != "" &&
 		def.Cookie != response.Cookie {
 		needUpdate = true
 		config.Cookie = def.Cookie
+		updateReason += fmt.Sprintf("Cookie changed( %s -> %s );", response.Cookie, def.Cookie)
 	}
 	if request.CookieTimeout != 0 &&
 		def.CookieTimeout != response.CookieTimeout {
 		needUpdate = true
 		config.CookieTimeout = def.CookieTimeout
+		updateReason += fmt.Sprintf("CookieTimeout changed( %d -> %d );", response.CookieTimeout, def.CookieTimeout)
 	}
 	if request.HealthCheckHttpCode != "" &&
 		def.HealthCheckHttpCode != response.HealthCheckHttpCode {
 		needUpdate = true
 		config.HealthCheckHttpCode = def.HealthCheckHttpCode
+		updateReason += fmt.Sprintf("HealthCheckHttpCode changed( %s -> %s );", response.HealthCheckHttpCode, def.HealthCheckHttpCode)
 	}
 	if request.HealthCheckDomain != "" &&
 		def.HealthCheckDomain != response.HealthCheckDomain {
 		needUpdate = true
 		config.HealthCheckDomain = def.HealthCheckDomain
+		updateReason += fmt.Sprintf("HealthCheckDomain changed( %s -> %s );", response.HealthCheckDomain, def.HealthCheckDomain)
 	}
 	forward := forwardPort(def.ForwardPort, t.Port)
 	if forward != 0 {
@@ -1161,6 +1207,7 @@ func (t *http) Update(ctx context.Context) error {
 	utils.Logf(t.Service, "http listener checker changed, request update [%s]\n", t.LoadBalancerID)
 	klog.V(5).Infof(PrettyJson(request))
 	klog.V(5).Infof(PrettyJson(response))
+	ctx = context.WithValue(ctx, utils.DryRunMsg, updateReason)
 	return t.Client.SetLoadBalancerHTTPListenerAttribute(ctx, config)
 }
 
@@ -1252,6 +1299,7 @@ func (t *https) Update(ctx context.Context) error {
 	}
 
 	needUpdate := false
+	updateReason := fmt.Sprintf("%s/%s need update: ", t.Service.Namespace, t.Service.Name)
 	/*
 		if request.Bandwidth != 0 &&
 			request.Bandwidth != response.Bandwidth {
@@ -1265,92 +1313,110 @@ func (t *https) Update(ctx context.Context) error {
 		def.AclStatus != response.AclStatus {
 		needUpdate = true
 		config.AclStatus = def.AclStatus
+		updateReason += fmt.Sprintf("AclStatus changed( %s -> %s );", response.AclStatus, def.AclStatus)
 	}
 	if request.AclID != "" &&
 		def.AclID != response.AclId {
 		needUpdate = true
 		config.AclId = def.AclID
+		updateReason += fmt.Sprintf("AclID changed( %s -> %s );", response.AclId, def.AclID)
 	}
 	if request.AclType != "" &&
 		def.AclType != response.AclType {
 		needUpdate = true
 		config.AclType = def.AclType
+		updateReason += fmt.Sprintf("AclType changed( %s -> %s );", response.AclType, def.AclType)
 	}
 	if request.Scheduler != "" &&
 		def.Scheduler != string(response.Scheduler) {
 		needUpdate = true
 		config.Scheduler = slb.SchedulerType(def.Scheduler)
+		updateReason += fmt.Sprintf("scheduler changed( %s -> %s );", response.Scheduler, def.Scheduler)
 	}
 	if request.HealthCheck != "" &&
 		def.HealthCheck != response.HealthCheck {
 		needUpdate = true
 		config.HealthCheck = def.HealthCheck
+		updateReason += fmt.Sprintf("HealthCheck changed( %s -> %s );", response.HealthCheck, def.HealthCheck)
 	}
 	if request.HealthCheckURI != "" &&
 		def.HealthCheckURI != response.HealthCheckURI {
 		needUpdate = true
 		config.HealthCheckURI = def.HealthCheckURI
+		updateReason += fmt.Sprintf("HealthCheckURI changed( %s -> %s );", response.HealthCheckURI, def.HealthCheckURI)
 	}
 	if request.HealthCheckConnectPort != 0 &&
 		def.HealthCheckConnectPort != response.HealthCheckConnectPort {
 		needUpdate = true
 		config.HealthCheckConnectPort = def.HealthCheckConnectPort
+		updateReason += fmt.Sprintf("HealthCheckConnectPort changed( %d -> %d );", response.HealthCheckConnectPort, def.HealthCheckConnectPort)
 	}
 	if request.HealthyThreshold != 0 &&
 		def.HealthyThreshold != response.HealthyThreshold {
 		needUpdate = true
 		config.HealthyThreshold = def.HealthyThreshold
+		updateReason += fmt.Sprintf("HealthyThreshold changed( %d -> %d );", response.HealthyThreshold, def.HealthyThreshold)
 	}
 	if request.UnhealthyThreshold != 0 &&
 		def.UnhealthyThreshold != response.UnhealthyThreshold {
 		needUpdate = true
 		config.UnhealthyThreshold = def.UnhealthyThreshold
+		updateReason += fmt.Sprintf("UnhealthyThreshold changed( %d -> %d );", response.UnhealthyThreshold, def.UnhealthyThreshold)
 	}
 	if request.HealthCheckTimeout != 0 &&
 		def.HealthCheckTimeout != response.HealthCheckTimeout {
 		needUpdate = true
 		config.HealthCheckTimeout = def.HealthCheckTimeout
+		updateReason += fmt.Sprintf("HealthCheckTimeout changed( %d -> %d );", response.HealthCheckTimeout, def.HealthCheckTimeout)
 	}
 	if request.HealthCheckInterval != 0 &&
 		def.HealthCheckInterval != response.HealthCheckInterval {
 		needUpdate = true
 		config.HealthCheckInterval = def.HealthCheckInterval
+		updateReason += fmt.Sprintf("HealthCheckInterval changed( %d -> %d );", response.HealthCheckInterval, def.HealthCheckInterval)
 	}
 
 	if string(request.StickySession) != "" &&
 		def.StickySession != response.StickySession {
 		needUpdate = true
 		config.StickySession = def.StickySession
+		updateReason += fmt.Sprintf("StickySession changed( %s -> %s );", response.StickySession, def.StickySession)
 	}
 	if string(request.StickySessionType) != "" &&
 		def.StickySessionType != response.StickySessionType {
 		needUpdate = true
 		config.StickySessionType = def.StickySessionType
+		updateReason += fmt.Sprintf("StickySessionType changed( %s -> %s );", response.StickySessionType, def.StickySessionType)
 	}
 	if request.Cookie != "" &&
 		def.Cookie != response.Cookie {
 		needUpdate = true
 		config.Cookie = def.Cookie
+		updateReason += fmt.Sprintf("Cookie changed( %s -> %s );", response.Cookie, def.Cookie)
 	}
 	if request.CookieTimeout != 0 &&
 		def.CookieTimeout != response.CookieTimeout {
 		needUpdate = true
 		config.CookieTimeout = def.CookieTimeout
+		updateReason += fmt.Sprintf("CookieTimeout changed( %d -> %d );", response.CookieTimeout, def.CookieTimeout)
 	}
 	if request.HealthCheckHttpCode != "" &&
 		def.HealthCheckHttpCode != response.HealthCheckHttpCode {
 		needUpdate = true
 		config.HealthCheckHttpCode = def.HealthCheckHttpCode
+		updateReason += fmt.Sprintf("HealthCheckHttpCode changed( %s -> %s );", response.HealthCheckHttpCode, def.HealthCheckHttpCode)
 	}
 	if request.HealthCheckDomain != "" &&
 		def.HealthCheckDomain != response.HealthCheckDomain {
 		needUpdate = true
 		config.HealthCheckDomain = def.HealthCheckDomain
+		updateReason += fmt.Sprintf("StickySession changed( %s -> %s );", response.HealthCheckDomain, def.HealthCheckDomain)
 	}
 	if request.CertID != "" &&
 		def.CertID != response.ServerCertificateId {
 		needUpdate = true
 		config.ServerCertificateId = def.CertID
+		updateReason += fmt.Sprintf("CertID changed( %s -> %s );", response.ServerCertificateId, def.CertID)
 	}
 	// backend server port has changed.
 	if int(t.NodePort) != response.BackendServerPort {
@@ -1375,5 +1441,6 @@ func (t *https) Update(ctx context.Context) error {
 	utils.Logf(t.Service, "https listener checker changed, request recreate [%s]\n", t.LoadBalancerID)
 	klog.V(5).Infof(PrettyJson(request))
 	klog.V(5).Infof(PrettyJson(response))
+	ctx = context.WithValue(ctx, utils.DryRunMsg, updateReason)
 	return t.Client.SetLoadBalancerHTTPSListenerAttribute(ctx, config)
 }

@@ -15,4 +15,6 @@ const (
 	LabelServiceHash                        = "service.beta.kubernetes.io/hash"
 	ECINodeLabel                            = "virtual-kubelet"
 	ContextService               contextKey = "request.service"
+	ContextSLB                              = "request.slb"
+	DryRunMsg                               = "dryRun.msg"
 )
