@@ -21,6 +21,7 @@ import (
 	"k8s.io/cloud-provider"
 	"k8s.io/cloud-provider-alibaba-cloud/cloud-controller-manager/utils"
 	"k8s.io/cloud-provider-alibaba-cloud/cloud-controller-manager/utils/metric"
+	servicehelper "k8s.io/cloud-provider/service/helpers"
 	metrics "k8s.io/component-base/metrics/prometheus/ratelimiter"
 	"k8s.io/klog"
 	controller "k8s.io/kube-aggregator/pkg/controllers"
@@ -540,6 +541,9 @@ func (con *Controller) ServiceSyncTask(k string) error {
 			klog.Errorf("unexpected nil service for update, wait retry. %s", k)
 			return fmt.Errorf("retry unexpected nil service %s. ", k)
 		}
+		if err := con.addServiceHash(service); err != nil {
+			return err
+		}
 		return con.update(cached, service)
 	}
 }
@@ -733,6 +737,26 @@ func (con *Controller) delete(svc *v1.Service) error {
 		key(svc),
 	)
 	con.local.Remove(key(svc))
+	return nil
+}
+
+func (con *Controller) addServiceHash(svc *v1.Service) error {
+	updated := svc.DeepCopy()
+	if updated.Labels == nil {
+		updated.Labels = make(map[string]string)
+	}
+	serviceHash, err := utils.GetServiceHash(svc)
+	if err != nil {
+		return fmt.Errorf("compute service hash: %s", err.Error())
+	}
+	updated.Labels[utils.LabelServiceHash] = serviceHash
+	if _, err := servicehelper.PatchService(con.client.CoreV1(), svc, updated); err != nil {
+		return fmt.Errorf("update service hash: %s", err.Error())
+	}
+	if svc.Labels == nil {
+		svc.Labels = make(map[string]string)
+	}
+	svc.Labels[utils.LabelServiceHash] = serviceHash
 	return nil
 }
 
