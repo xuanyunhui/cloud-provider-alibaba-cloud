@@ -137,7 +137,7 @@ func ServiceModeLocal(svc *v1.Service) bool {
 
 func GetLoadBalancerName(service *v1.Service) string {
 	//AliCloud requires that the name of a load balancer does the service used.
-	ret := string(service.Name)
+	ret := strings.Join([]string{service.Name, strings.ReplaceAll(string(service.UID), "-", "")}, "-")
 	//AliCloud requires that the name of a load balancer is shorter than 80 bytes.
 	if len(ret) > 80 {
 		ret = ret[:80]
